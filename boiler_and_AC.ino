@@ -3,7 +3,7 @@
 #include "DHT.h"
 #include "IRremoteESP8266.h"
 
-DHT dht(2, DHT22); 
+DHT dht(2, DHT11); 
 IRsend irsend(14);
 unsigned int data[8][43] = {
   { 4450,4400, 600,1650, 550,550, 550,550, 550,550, 600,500, 600,550, 550,550, 550,550, 550,550, 600,1650, 550,550, 550,550, 550,1650, 600,1650, 550,1650, 600,1600, 600,1650, 550,1700, 550,500, 600,550, 550 },
@@ -93,6 +93,8 @@ void setup() {
   dht.begin();
   
 	irsend.begin();
+  pinMode(5,OUTPUT);
+  pinMode(5,HIGH);
 	pinMode(16, OUTPUT);
 	digitalWrite(16, LOW);
 	// Connect to WiFi network
@@ -127,13 +129,18 @@ void dhtCheck(){
   temp=dht.computeHeatIndex(t, h, false);
   if(!(isnan(temp))) hic=temp;
 }
-
+unsigned long boilertime;
 void loop() {
 
 	if (millis() - checkTime > 500 || millis() - checkTime < 0) {
 		dhtCheck();
    checkTime=millis();
 	}
+ if(millis()-boilertime>43200000 || millis()-boilertime<0){
+  pinMode(5,LOW);
+  delay(3000);
+  pinMode(5,HIGH);
+ }
 	if (WiFi.status() != WL_CONNECTED) {
 		Serial.print("Wifi not connected");
 		WiFi.begin(ssid, password);
