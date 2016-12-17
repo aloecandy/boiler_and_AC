@@ -25,9 +25,11 @@ bool turbo = false;
 bool lowFanSpeedA = false;
 bool lowFanSpeedB = false;
 
-float h, t, hic;
+bool autoMode = false;
 
-bool mode = false;  //false->cool true->fan
+float h, t, hic;
+int target=20;
+bool acmode = false;  //false->cool true->fan
 
 const char* ssid = "dlink-A3D8";  //your AP
 const char* password = "vtpii82150"; //AP password
@@ -47,7 +49,7 @@ void  sendir(int index) {
 		turbo = false;
 		lowFanSpeedA = false;
 		lowFanSpeedB = false;
-		mode = false;
+		acmode = false;
 	}
 	else if (acState) {
 		if (index == 1) {
@@ -57,10 +59,10 @@ void  sendir(int index) {
 			if (acTemp > 18) acTemp--;
 		}
 
-		else if (index == 3)  mode = false;
-		else if (index == 4) mode = true;
+		else if (index == 3)  acmode = false;
+		else if (index == 4) acmode = true;
 		else if (index == 5) {
-			if (mode) lowFanSpeedB = !(lowFanSpeedB);
+			if (acmode) lowFanSpeedB = !(lowFanSpeedB);
 			else lowFanSpeedA = !(lowFanSpeedA);
 		}
 		else if (index == 6) {
@@ -70,10 +72,10 @@ void  sendir(int index) {
 			turbo = !(turbo);
 		}
 	}
-
-
 }
-String html0 = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><head><title>Hello1</title><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, user-scalable=no\"></head><body><table border=\"1\" width=\"100%\" cellpadding=\"10px\"><tr align=\"center\"><td>Humidity</td><td>";
+String html0 = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html><head><title>Hello1</title><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, user-scalable=no\"></head><body><table border=\"1\" width=\"100%\" cellpadding=\"10px\"><tr align=\"center\"><td>Target Temp</td><td>";
+String html0_0="</td></tr><tr align=\"center\"><td>Auto?</td><td>";
+String html0_1="</td></tr><tr align=\"center\"><td>Humidity</td><td>";
 String html1 = "</td></tr><tr align=\"center\"><td>Temperature</td><td>";
 String html2 = "</td></tr><tr align=\"center\"><td>HeatIndex</td><td>";
 String html3 = "</td></tr><tr align=\"center\"><td>AirConditioner</td><td>";
@@ -90,13 +92,15 @@ void setup() {
 	Serial.begin(115200);
 	delay(10);
 
-  dht.begin();
+	dht.begin();
   
 	irsend.begin();
-  pinMode(5,OUTPUT);
-  pinMode(5,HIGH);
+	
+	pinMode(5,OUTPUT);
+	digitalWrite(5,LOW);
 	pinMode(16, OUTPUT);
 	digitalWrite(16, LOW);
+	
 	// Connect to WiFi network
 	Serial.println();
 	Serial.println();
@@ -120,7 +124,6 @@ void setup() {
 	Serial.println(WiFi.localIP());
 }
 unsigned long checkTime = 0;
-
 void dhtCheck(){
   float temp=dht.readHumidity();
   if(!(isnan(temp))) h=temp;
@@ -129,17 +132,26 @@ void dhtCheck(){
   temp=dht.computeHeatIndex(t, h, false);
   if(!(isnan(temp))) hic=temp;
 }
-unsigned long boilertime;
+unsigned long boilertime=0;
+void resetBoiler(){
+  digitalWrite(5,HIGH);
+  delay(3000);
+  digitalWrite(5,LOW);
+  boilertime=0;
+}
 void loop() {
 
 	if (millis() - checkTime > 500 || millis() - checkTime < 0) {
 		dhtCheck();
-   checkTime=millis();
+    checkTime=millis();
+    boilertime++;
+    if(autoMode){
+      if(target>t)  digitalWrite(16, HIGH);
+      else  digitalWrite(16,LOW); 
+    }
 	}
- if(millis()-boilertime>43200000 || millis()-boilertime<0){
-  pinMode(5,LOW);
-  delay(3000);
-  pinMode(5,HIGH);
+ if(boilertime>86400){
+  resetBoiler();
  }
 	if (WiFi.status() != WL_CONNECTED) {
 		Serial.print("Wifi not connected");
@@ -170,6 +182,7 @@ void loop() {
 			}
 		}
 		String req = client.readStringUntil('\r');
+    req.toUpperCase();
 		Serial.println(req);
 		client.flush();
 		// Match the request
@@ -195,10 +208,22 @@ void loop() {
 		else if (req.indexOf("?BOILER=OFF") != -1) {
 			digitalWrite(16, LOW);
 		}
-
 		else if (req.indexOf("?BOILER=ON") != -1) {
 			digitalWrite(16, HIGH);
 		}
+   else if (req.indexOf("?TARGET=") != -1){
+    String ttt=req.substring(req.indexOf("?TARGET=")+8,req.indexOf("?TARGET=")+10);
+    target=ttt.toInt();
+	 }
+ else if (req.indexOf("?AUTO=ON")!=-1){
+    autoMode=true;
+ }
+ else if (req.indexOf("?AUTO=OFF")!=-1){
+    autoMode=false;
+ }
+ else if(req.indexOf("?RESET")!=-1){
+  resetBoiler();
+ }
 
 
 
@@ -206,6 +231,11 @@ void loop() {
 
 
 		client.print(html0);
+    client.print(target);
+    client.print(html0_0);
+    if(autoMode)   client.print("ON");
+    else client.print("OFF");
+    client.print(html0_1);
 		client.print(h);
 		client.print(html1);
 		client.print(t);
@@ -216,7 +246,7 @@ void loop() {
 			client.print("ON,");
 			client.print(acTemp);
 			client.print(html5);
-			if (mode) {
+			if (acmode) {
 				client.print("Fan");
 				client.print(html6);
 				if (lowFanSpeedB) client.print("Low");
