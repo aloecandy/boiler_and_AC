@@ -150,7 +150,7 @@ void loop() {
       else  digitalWrite(16,LOW); 
     }
 	}
- if(boilertime>86400){
+ if(boilertime>8640){
   resetBoiler();
  }
 	if (WiFi.status() != WL_CONNECTED) {
