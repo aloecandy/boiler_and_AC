@@ -95,9 +95,12 @@ void setup() {
 	dht.begin();
   
 	irsend.begin();
-	
+
+  //boiler power
 	pinMode(5,OUTPUT);
 	digitalWrite(5,LOW);
+
+  //boiler on off
 	pinMode(16, OUTPUT);
 	digitalWrite(16, LOW);
 	
@@ -123,6 +126,15 @@ void setup() {
 	// Print the IP address
 	Serial.println(WiFi.localIP());
 }
+void setBoiler(bool state){
+  if(state){
+    resetBoiler();
+    digitalWrite(16, HIGH);
+  }
+  else{
+    digitalWrite(16,LOW);
+  }
+}
 unsigned long checkTime = 0;
 void dhtCheck(){
   float temp=dht.readHumidity();
@@ -133,10 +145,10 @@ void dhtCheck(){
   if(!(isnan(temp))) hic=temp;
 }
 unsigned long boilertime=0;
+bool resetTimer=false;
 void resetBoiler(){
+  resetTimer=true;
   digitalWrite(5,HIGH);
-  delay(3000);
-  digitalWrite(5,LOW);
   boilertime=0;
 }
 void loop() {
@@ -146,12 +158,16 @@ void loop() {
     checkTime=millis();
     boilertime++;
     if(autoMode){
-      if(target>t)  digitalWrite(16, HIGH);
-      else  digitalWrite(16,LOW); 
+      if(target>t&&(digitalRead(16)==LOW))  setBoiler(true);
+      else if(target<t) setBoiler(false);
     }
 	}
- if(boilertime>8640){
-  resetBoiler();
+ if(boilertime==3){
+  digitalWrite(5, LOW);
+ }
+ else if(boilertime>7200){
+  if(digitalRead(16)==LOW) resetBoiler();
+  else boilertime=4;
  }
 	if (WiFi.status() != WL_CONNECTED) {
 		Serial.print("Wifi not connected");
@@ -202,14 +218,15 @@ void loop() {
 			sendir(2);
 		}
 		else if (req.indexOf("?BOILER=TOGGLE") != -1) {
-			digitalWrite(16, (!digitalRead(16)));
+		  if(digitalRead(16)==HIGH) setBoiler(false);
+      else  setBoiler(true);
 		}
 
 		else if (req.indexOf("?BOILER=OFF") != -1) {
-			digitalWrite(16, LOW);
+			setBoiler(false);
 		}
 		else if (req.indexOf("?BOILER=ON") != -1) {
-			digitalWrite(16, HIGH);
+      setBoiler(true);
 		}
    else if (req.indexOf("?TARGET=") != -1){
     String ttt=req.substring(req.indexOf("?TARGET=")+8,req.indexOf("?TARGET=")+10);
@@ -278,6 +295,7 @@ void loop() {
 		client.stop(); //very important
 		client.flush();
 		Serial.println("Client disconnected");
+    
 		return;
 
 	}
