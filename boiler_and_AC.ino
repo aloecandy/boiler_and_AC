@@ -237,6 +237,7 @@ void loop() {
  }
  else if (req.indexOf("?AUTO=OFF")!=-1){
     autoMode=false;
+    setBoiler(false);
  }
  else if(req.indexOf("?RESET")!=-1){
   resetBoiler();
